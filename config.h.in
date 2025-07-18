@@ -1,0 +1,14 @@
+// Copyright 2020 - 2023, project-repo and the NEDM contributors
+// SPDX-License-Identifier: MIT
+
+#ifndef NEDM_CONFIG_H
+#define NEDM_CONFIG_H
+
+#mesondefine NEDM_HAS_XWAYLAND
+#mesondefine NEDM_HAS_FANALYZE
+
+#mesondefine NEDM_VERSION
+
+#define MAX_NESTING_LEVEL 50
+
+#endif
