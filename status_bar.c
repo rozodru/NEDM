@@ -95,7 +95,7 @@ status_bar_buffer_create(uint32_t width, uint32_t height, uint32_t stride) {
 
 static struct wlr_scene_buffer *create_status_bar_buffer(struct nedm_status_bar *status_bar) {
 	struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_create(
-		status_bar->output->layers[3], NULL);
+		status_bar->output->layers[2], NULL);
 	
 	if (!scene_buffer) {
 		wlr_log(WLR_ERROR, "Failed to create scene buffer for status bar");
@@ -105,7 +105,7 @@ static struct wlr_scene_buffer *create_status_bar_buffer(struct nedm_status_bar 
 	return scene_buffer;
 }
 
-static void status_bar_gather_system_info(struct nedm_status_info *info) {
+static void status_bar_gather_system_info(struct nedm_status_bar *status_bar, struct nedm_status_info *info) {
 	time_t now;
 	struct tm *tm_info;
 	char time_buffer[32];
@@ -148,22 +148,22 @@ static void status_bar_gather_system_info(struct nedm_status_info *info) {
 		info->charging = false;
 	}
 	
-	// Volume info (simplified - just show if available)
-	if (access("/usr/bin/amixer", F_OK) == 0) {
-		FILE *vol_pipe = popen("amixer get Master | grep -o '[0-9]*%' | head -1", "r");
-		if (vol_pipe) {
-			char vol_buffer[16];
-			if (fgets(vol_buffer, sizeof(vol_buffer), vol_pipe)) {
-				vol_buffer[strcspn(vol_buffer, "\n")] = 0;
-				free(info->volume_str);
-				info->volume_str = malloc(32);
-				snprintf(info->volume_str, 32, "VOL: %s", vol_buffer);
-			}
-			pclose(vol_pipe);
+	// Volume info - get actual volume percentage
+	free(info->volume_str);
+	info->volume_str = malloc(32);
+	
+	FILE *vol_pipe = popen("amixer get Master | grep -o '[0-9]*%' | head -1", "r");
+	if (vol_pipe) {
+		char vol_buffer[16];
+		if (fgets(vol_buffer, sizeof(vol_buffer), vol_pipe)) {
+			vol_buffer[strcspn(vol_buffer, "\n")] = 0;
+			snprintf(info->volume_str, 32, "VOL: %s", vol_buffer);
+		} else {
+			snprintf(info->volume_str, 32, "VOL: ??");
 		}
-	}
-	if (!info->volume_str) {
-		info->volume_str = strdup("VOL: N/A");
+		pclose(vol_pipe);
+	} else {
+		snprintf(info->volume_str, 32, "VOL: N/A");
 	}
 	
 	// WiFi info (simplified)
@@ -187,9 +187,14 @@ static void status_bar_gather_system_info(struct nedm_status_info *info) {
 		info->wifi_connected = false;
 	}
 	
-	// Workspace info (placeholder)
+	// Workspace info - get actual current workspace from output
 	free(info->workspace_str);
-	info->workspace_str = strdup("WS: 1");
+	if (status_bar && status_bar->output) {
+		info->workspace_str = malloc(16);
+		snprintf(info->workspace_str, 16, "WS: %d", status_bar->output->curr_workspace + 1);
+	} else {
+		info->workspace_str = strdup("WS: ?");
+	}
 }
 
 static void status_bar_free_info(struct nedm_status_info *info) {
@@ -230,13 +235,7 @@ void nedm_status_bar_render(struct nedm_status_bar *status_bar) {
 	
 	// Gather system information
 	struct nedm_status_info info = {0};
-	status_bar_gather_system_info(&info);
-	
-	// Debug: Print what we gathered
-	wlr_log(WLR_DEBUG, "Status bar info: time=%s, date=%s, battery=%s", 
-		info.time_str ? info.time_str : "NULL", 
-		info.date_str ? info.date_str : "NULL",
-		info.battery_str ? info.battery_str : "NULL");
+	status_bar_gather_system_info(status_bar, &info);
 	
 	// Calculate positions for right-aligned text
 	int current_x = status_bar->width - STATUS_BAR_MARGIN;
@@ -349,12 +348,26 @@ void nedm_status_bar_render(struct nedm_status_bar *status_bar) {
 		wlr_scene_buffer_set_buffer(status_bar->scene_buffer, &buf->base);
 		wlr_buffer_drop(&buf->base);
 	}
+	
 }
 
 static int status_bar_timer_callback(void *data) {
 	struct nedm_status_bar *status_bar = data;
+	
+	// Validate status bar structure before rendering
+	if (!status_bar || !status_bar->output || !status_bar->output->server) {
+		return 0; // Stop timer
+	}
+	
+	if (!status_bar->mapped) {
+		return 0; // Stop timer
+	}
+	
 	nedm_status_bar_render(status_bar);
-	return status_bar->output->server->status_bar_config.update_interval;
+	// Manually reschedule the timer instead of returning interval
+	wl_event_source_timer_update(status_bar->timer, status_bar->output->server->status_bar_config.update_interval);
+	
+	return 0; // Always return 0, we handle rescheduling manually
 }
 
 static void status_bar_handle_output_destroy(struct wl_listener *listener, void *data) {

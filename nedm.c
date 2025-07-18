@@ -66,6 +66,49 @@
 #include "xwayland.h"
 #endif
 
+static void handle_constraint_destroy(struct wl_listener *listener, __attribute__((unused)) void *data) {
+	struct nedm_seat *seat = wl_container_of(listener, seat, constraint_destroy);
+	seat->active_constraint = NULL;
+	wl_list_remove(&seat->constraint_destroy.link);
+}
+
+static void handle_new_pointer_constraint(struct wl_listener *listener, void *data) {
+	struct nedm_server *server = wl_container_of(listener, server, new_pointer_constraint);
+	struct wlr_pointer_constraint_v1 *constraint = data;
+	
+	// Check if constraint is for the focused surface
+	struct wlr_surface *focused_surface = server->seat->seat->pointer_state.focused_surface;
+	if (focused_surface == constraint->surface) {
+		// Clear any existing constraint
+		if (server->seat->active_constraint) {
+			wlr_pointer_constraint_v1_send_deactivated(server->seat->active_constraint);
+			wl_list_remove(&server->seat->constraint_destroy.link);
+		}
+		
+		// Set as active constraint
+		server->seat->active_constraint = constraint;
+		server->seat->constraint_destroy.notify = handle_constraint_destroy;
+		wl_signal_add(&constraint->events.destroy, &server->seat->constraint_destroy);
+		
+		wlr_pointer_constraint_v1_send_activated(constraint);
+		
+		// For locked pointer, warp cursor to surface center for now
+		if (constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
+			// Get view position and size
+			if (server->seat->focused_view) {
+				int gx, gy;
+				wlr_scene_node_coords(&server->seat->focused_view->scene_tree->node, &gx, &gy);
+				
+				// Warp to center of view (simplified - not using constraint region)
+				struct wlr_surface *surface = constraint->surface;
+				double cx = (double)gx + surface->current.width / 2.0;
+				double cy = (double)gy + surface->current.height / 2.0;
+				wlr_cursor_warp(server->seat->cursor, NULL, cx, cy);
+			}
+		}
+	}
+}
+
 #ifndef WAIT_ANY
 #define WAIT_ANY -1
 #endif
@@ -301,9 +344,10 @@ main(int argc, char *argv[]) {
 	server.message_config.enabled = true;
 	
 	// Initialize default status bar configuration
+	server.status_bar_config.enabled = true;
 	server.status_bar_config.position = NEDM_STATUS_BAR_TOP_RIGHT;
 	server.status_bar_config.height = 24;
-	server.status_bar_config.width_percent = 20;
+	server.status_bar_config.width_percent = 30;
 	server.status_bar_config.update_interval = 1000;
 	server.status_bar_config.bg_color[0] = 0.1;
 	server.status_bar_config.bg_color[1] = 0.1;
@@ -417,7 +461,7 @@ main(int argc, char *argv[]) {
 	// Initialize status bar config defaults
 	server.status_bar_config.position = NEDM_STATUS_BAR_TOP_RIGHT;
 	server.status_bar_config.height = 24;
-	server.status_bar_config.width_percent = 20;
+	server.status_bar_config.width_percent = 30;
 	server.status_bar_config.update_interval = 1000;
 	server.status_bar_config.bg_color[0] = 0.1;
 	server.status_bar_config.bg_color[1] = 0.1;
@@ -658,17 +702,23 @@ main(int argc, char *argv[]) {
 	nedm_layer_shell_init(&server);
 
 	// Initialize pointer constraints and relative pointer protocols
-	if(!wlr_pointer_constraints_v1_create(server.wl_display)) {
+	server.pointer_constraints = wlr_pointer_constraints_v1_create(server.wl_display);
+	if(!server.pointer_constraints) {
 		wlr_log(WLR_ERROR, "Unable to create pointer constraints manager");
 		ret = 1;
 		goto end;
 	}
 
-	if(!wlr_relative_pointer_manager_v1_create(server.wl_display)) {
+	server.relative_pointer_manager = wlr_relative_pointer_manager_v1_create(server.wl_display);
+	if(!server.relative_pointer_manager) {
 		wlr_log(WLR_ERROR, "Unable to create relative pointer manager");
 		ret = 1;
 		goto end;
 	}
+
+	// Set up pointer constraint event handler
+	server.new_pointer_constraint.notify = handle_new_pointer_constraint;
+	wl_signal_add(&server.pointer_constraints->events.new_constraint, &server.new_pointer_constraint);
 
 #if NEDM_HAS_XWAYLAND
 	server.xwayland = wlr_xwayland_create(server.wl_display, compositor, true);

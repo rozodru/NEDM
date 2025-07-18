@@ -810,9 +810,10 @@ parse_status_bar_config(char **saveptr, char **errstr) {
 	}
 
 	// Set defaults
+	cfg->enabled = true;
 	cfg->position = NEDM_STATUS_BAR_TOP_RIGHT;
 	cfg->height = 24;
-	cfg->width_percent = 20;
+	cfg->width_percent = 30;
 	cfg->update_interval = 1000;
 	cfg->bg_color[0] = 0.1f; cfg->bg_color[1] = 0.1f; cfg->bg_color[2] = 0.1f; cfg->bg_color[3] = 0.9f;
 	cfg->text_color[0] = 1.0f; cfg->text_color[1] = 1.0f; cfg->text_color[2] = 1.0f; cfg->text_color[3] = 1.0f;
@@ -830,7 +831,21 @@ parse_status_bar_config(char **saveptr, char **errstr) {
 		goto error;
 	}
 
-	if(strcmp(setting, "position") == 0) {
+	if(strcmp(setting, "enabled") == 0) {
+		char *enabled_str = strtok_r(NULL, " ", saveptr);
+		if(enabled_str == NULL) {
+			*errstr = log_error("Expected enabled value for status bar configuration, got none");
+			goto error;
+		}
+		if(strcmp(enabled_str, "true") == 0 || strcmp(enabled_str, "1") == 0) {
+			cfg->enabled = true;
+		} else if(strcmp(enabled_str, "false") == 0 || strcmp(enabled_str, "0") == 0) {
+			cfg->enabled = false;
+		} else {
+			*errstr = log_error("Invalid enabled value \"%s\" for status bar (use true/false)", enabled_str);
+			goto error;
+		}
+	} else if(strcmp(setting, "position") == 0) {
 		char *pos_str = strtok_r(NULL, " ", saveptr);
 		if(pos_str == NULL) {
 			*errstr = log_error("Expected position for status bar configuration, got none");

@@ -3,7 +3,7 @@
 project(
   'nedm',
   'c',
-version : '3.0.1',
+version : '1.0',
 license : 'MIT',
 default_options : ['c_std=c23,c11', 'warning_level=3']
 )

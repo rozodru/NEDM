@@ -16,7 +16,9 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
 #include <wlr/types/wlr_keyboard_group.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_primary_selection.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_touch.h>
@@ -705,11 +707,39 @@ process_cursor_motion(struct nedm_seat *seat, uint32_t time) {
 		    wlr_scene_surface_try_from_buffer(wlr_scene_buffer_from_node(node));
 		if(scene_surface != NULL) {
 			surface = scene_surface->surface;
-			if(surface != NULL) {
-				wlr_seat_pointer_notify_enter(wlr_seat, surface, sx, sy);
+		}
+	}
+
+	// Check for active pointer constraint
+	if (seat->active_constraint) {
+		struct wlr_pointer_constraint_v1 *constraint = seat->active_constraint;
+		
+		// Deactivate constraint if surface changed
+		if (constraint->surface != surface) {
+			wlr_pointer_constraint_v1_send_deactivated(constraint);
+			wl_list_remove(&seat->constraint_destroy.link);
+			seat->active_constraint = NULL;
+		} else {
+			// Handle constraint behavior
+			if (constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
+				// For locked pointer, don't move cursor but still process enter/motion
+				if (surface && time > 0) {
+					wlr_seat_pointer_notify_enter(wlr_seat, surface, sx, sy);
+					wlr_seat_pointer_notify_motion(wlr_seat, time, sx, sy);
+				}
+				goto skip_cursor_update;
+			}
+			
+			// For confined constraints, clamp cursor to region
+			if (constraint->type == WLR_POINTER_CONSTRAINT_V1_CONFINED) {
+				// TODO: Implement proper confinement
+				// For now, just allow the motion
 			}
 		}
+	}
 
+	if(surface != NULL) {
+		wlr_seat_pointer_notify_enter(wlr_seat, surface, sx, sy);
 		bool focus_changed = wlr_seat->pointer_state.focused_surface != surface;
 		if(!focus_changed && time > 0) {
 			wlr_seat_pointer_notify_motion(wlr_seat, time, sx, sy);
@@ -717,6 +747,8 @@ process_cursor_motion(struct nedm_seat *seat, uint32_t time) {
 	} else {
 		wlr_seat_pointer_clear_focus(wlr_seat);
 	}
+
+skip_cursor_update:
 
 	struct nedm_drag_icon *drag_icon;
 	wl_list_for_each(drag_icon, &seat->drag_icons, link) {
@@ -789,6 +821,15 @@ handle_cursor_motion(struct wl_listener *listener, void *data) {
 	wlr_cursor_move(seat->cursor, &event->pointer->base, event->delta_x,
 	                event->delta_y);
 	process_cursor_motion(seat, event->time_msec);
+
+	// Send relative motion AFTER cursor position is updated
+	if (seat->server->relative_pointer_manager) {
+		wlr_relative_pointer_manager_v1_send_relative_motion(
+		    seat->server->relative_pointer_manager, seat->seat,
+		    (uint64_t)event->time_msec * 1000, event->delta_x, event->delta_y,
+		    event->unaccel_dx, event->unaccel_dy);
+	}
+
 	wlr_idle_notifier_v1_notify_activity(seat->server->idle, seat->seat);
 }
 
@@ -1013,6 +1054,7 @@ seat_create(struct nedm_server *server) {
 
 	seat->mode = 0;
 	seat->default_mode = 0;
+	seat->active_constraint = NULL;
 
 	return seat;
 }
@@ -1021,6 +1063,13 @@ void
 seat_destroy(struct nedm_seat *seat) {
 	if(!seat) {
 		return;
+	}
+
+	// Clean up active constraint
+	if (seat->active_constraint) {
+		wlr_pointer_constraint_v1_send_deactivated(seat->active_constraint);
+		wl_list_remove(&seat->constraint_destroy.link);
+		seat->active_constraint = NULL;
 	}
 
 	wl_list_remove(&seat->request_start_drag.link);
@@ -1042,6 +1091,13 @@ seat_set_focus(struct nedm_seat *seat, struct nedm_view *view) {
 	struct nedm_server *server = seat->server;
 	struct wlr_seat *wlr_seat = seat->seat;
 	struct nedm_view *prev_view = seat_get_focus(seat);
+
+	// Clear any active pointer constraint when focus changes
+	if (seat->active_constraint) {
+		wlr_pointer_constraint_v1_send_deactivated(seat->active_constraint);
+		wl_list_remove(&seat->constraint_destroy.link);
+		seat->active_constraint = NULL;
+	}
 
 	/* Focusing the background */
 	if(view == NULL) {

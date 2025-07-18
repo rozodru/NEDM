@@ -261,3 +261,11 @@ NEDM is now a **fully-featured modern Wayland compositor** with excellent applic
 - **Protocol Support**: ✅ All claimed protocols are properly implemented and functional
 - **System Stability**: ✅ No crashes, proper event handling and cleanup
 - **Configuration**: ✅ Full configuration system working for all desktop components
+
+### 17. **Gaming Pointer Accuracy Fix** ✅ (Completed)
+- **Original Issue**: Gaming applications had coordinate offset - clicks required moving mouse slightly above buttons
+- **Root Cause**: Event ordering bug in `seat.c:817-833` - relative pointer events sent before cursor position updates
+- **Technical Solution**: Moved `wlr_relative_pointer_manager_v1_send_relative_motion()` call to occur AFTER `wlr_cursor_move()` and `process_cursor_motion()`
+- **Result**: Both relative pointer events and surface pointer events now use synchronized cursor position
+- **File Modified**: `seat.c` - reordered event sequence in `handle_cursor_motion()` function
+- **Status**: Build successful, pointer accuracy issue resolved for gaming applications

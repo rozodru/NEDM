@@ -21,6 +21,7 @@ enum nedm_status_bar_position {
 };
 
 struct nedm_status_bar_config {
+	bool enabled;
 	enum nedm_status_bar_position position;
 	uint32_t height;
 	uint32_t width_percent;

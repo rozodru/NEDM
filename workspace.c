@@ -123,5 +123,23 @@ workspace_focus(struct nedm_output *outp, int ws) {
 	    &outp->bg->node, &outp->workspaces[outp->curr_workspace]->scene->node);
 	wlr_scene_node_place_above(&outp->workspaces[ws]->scene->node,
 	                           &outp->bg->node);
+	
+	// Ensure proper layer ordering: background(0) -> bottom(1) -> workspace -> top(2) -> overlay(3)
+	// Background layer should be below workspace content, but visible
+	if (outp->layers[0]) {
+		wlr_scene_node_place_below(&outp->layers[0]->node, &outp->workspaces[ws]->scene->node);
+	}
+	if (outp->layers[1]) {
+		wlr_scene_node_place_below(&outp->layers[1]->node, &outp->workspaces[ws]->scene->node);
+	}
+	// Top and overlay layers should be above workspace content
+	if (outp->layers[2]) {
+		wlr_scene_node_place_above(&outp->layers[2]->node, &outp->workspaces[ws]->scene->node);
+	}
+	if (outp->layers[3]) {
+		wlr_scene_node_place_above(&outp->layers[3]->node, 
+		                           outp->layers[2] ? &outp->layers[2]->node : &outp->workspaces[ws]->scene->node);
+	}
+	
 	outp->curr_workspace = ws;
 }

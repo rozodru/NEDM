@@ -35,6 +35,8 @@ struct nedm_seat {
 	struct wlr_cursor *cursor;
 	struct nedm_tile *cursor_tile;
 	struct wlr_xcursor_manager *xcursor_manager;
+	struct wlr_pointer_constraint_v1 *active_constraint;
+	struct wl_listener constraint_destroy;
 	struct wl_listener cursor_motion;
 	struct wl_listener cursor_motion_absolute;
 	struct wl_listener cursor_button;

@@ -55,6 +55,9 @@ struct nedm_server {
 	struct wl_list xdg_decorations;
 	
 	struct nedm_layer_shell *layer_shell;
+	struct wlr_pointer_constraints_v1 *pointer_constraints;
+	struct wlr_relative_pointer_manager_v1 *relative_pointer_manager;
+	struct wl_listener new_pointer_constraint;
 #if NEDM_HAS_XWAYLAND
 	struct wl_listener new_xwayland_surface;
 	struct wlr_xwayland *xwayland;
