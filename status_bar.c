@@ -32,7 +32,7 @@
 static struct wlr_scene_rect *create_status_bar_rect(struct nedm_output *output, 
 		uint32_t width, uint32_t height, float bg_color[4]) {
 	
-	struct wlr_scene_rect *rect = wlr_scene_rect_create(output->layers[2], 
+	struct wlr_scene_rect *rect = wlr_scene_rect_create(output->layers[3], 
 		width, height, bg_color);
 	
 	return rect;
@@ -164,6 +164,12 @@ void nedm_status_bar_render(struct nedm_status_bar *status_bar) {
 	// Gather system information
 	struct nedm_status_info info = {0};
 	status_bar_gather_system_info(&info);
+	
+	// Debug: Print what we gathered
+	wlr_log(WLR_DEBUG, "Status bar info: time=%s, date=%s, battery=%s", 
+		info.time_str ? info.time_str : "NULL", 
+		info.date_str ? info.date_str : "NULL",
+		info.battery_str ? info.battery_str : "NULL");
 	
 	// Calculate positions for right-aligned text
 	int current_x = status_bar->width - STATUS_BAR_MARGIN;
@@ -303,7 +309,10 @@ void nedm_status_bar_create_for_output(struct nedm_output *output) {
 	status_bar->font_desc = pango_font_description_from_string(font_str);
 	pango_layout_set_font_description(status_bar->pango_layout, status_bar->font_desc);
 	
-	// Create the status bar rectangle
+	// Render the status bar text first
+	nedm_status_bar_render(status_bar);
+	
+	// Create the status bar rectangle (temporary - should be replaced with Cairo surface)
 	status_bar->scene_rect = create_status_bar_rect(output, status_bar->width, status_bar->height, config->bg_color);
 	if (!status_bar->scene_rect) {
 		wlr_log(WLR_ERROR, "Failed to create scene rect for status bar");

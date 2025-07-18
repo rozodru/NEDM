@@ -403,6 +403,35 @@ input_manager_create(struct nedm_server *server) {
 	return input;
 }
 
+void
+input_manager_destroy(struct nedm_input_manager *input) {
+	if (!input) {
+		return;
+	}
+
+	// Remove virtual keyboard listeners first
+	if (input->virtual_keyboard) {
+		wl_list_remove(&input->virtual_keyboard_new.link);
+	}
+
+	// Remove virtual pointer listeners
+	if (input->virtual_pointer) {
+		wl_list_remove(&input->virtual_pointer_new.link);
+	}
+
+	// Remove input device listeners
+	wl_list_remove(&input->new_input.link);
+
+	// Clean up device list - but don't free devices if they were already handled by seat
+	struct nedm_input_device *device, *tmp;
+	wl_list_for_each_safe(device, tmp, &input->devices, link) {
+		wl_list_remove(&device->link);
+		// Don't free device - it should have been freed by seat destruction
+	}
+
+	free(input);
+}
+
 uint32_t
 get_mouse_bindsym(const char *name, char **error) {
 	// Get event code from name

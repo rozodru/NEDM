@@ -210,3 +210,41 @@ The project has successfully completed the **foundation and desktop UI phase**. 
 - **Robust build system** with proper dependency management
 
 NEDM is now a **fully-featured modern Wayland compositor** with excellent application compatibility, integrated desktop UI, wallpaper support, and comprehensive configuration options. The next phase focuses on integrating the configuration system with the implementations, advanced features, and performance optimization to provide a complete desktop experience.
+
+## 🚧 Current Issues & Debugging (Session 2)
+
+### 12. **Startup Crash Fixes** ✅
+- **Original Issue**: NEDM crashed on startup with `wl_list_empty(&kb->events.key.listener_list)' failed`
+- **Root Cause**: Multiple cleanup order bugs in shutdown sequence
+- **Fixes Applied**:
+  - Fixed keyboard event listener cleanup order in `seat.c:898-899`
+  - Fixed wallpaper listener removal check in `wallpaper.c:243`
+  - Fixed cursor event listener cleanup order in `seat.c:914-927`
+  - Created proper `input_manager_destroy()` function for virtual keyboard cleanup
+  - Fixed config file by copying from `examples/config` instead of using broken user config
+
+### 13. **UI Rendering Issues** ⚠️ (Partially Fixed)
+- **Status Bar**: No text displayed - renders to Cairo surface but displays colored rectangle
+- **Wallpaper**: No image displayed - renders to Cairo surface but displays colored rectangle
+- **Window Layering**: Status bar appears behind windows - moved to layer 3 (OVERLAY)
+
+**Technical Analysis**:
+- Status bar creates Cairo surface and renders text properly
+- Wallpaper creates Cairo surface and renders image properly
+- **Core Problem**: Both use `wlr_scene_rect_create()` instead of proper scene buffer from Cairo surface
+- **Solution Required**: Implement proper wlroots buffer creation from Cairo surfaces
+
+**Configuration Applied**:
+- Enabled status bar config: `configure_status_bar` options
+- Enabled wallpaper config: `configure_wallpaper` options
+- Added proper default initialization for both configs in `nedm.c`
+
+### 14. **Current Status** ✅
+- **NEDM runs successfully** without crashes
+- **All original functionality working** (keybindings, window management, etc.)
+- **Config parsing fixed** by using proper config file
+- **Keyboard crash eliminated** - was the main issue reported
+
+**Remaining Work**:
+- Implement proper Cairo surface → wlroots buffer → scene buffer pipeline
+- Fix wallpaper and status bar rendering to display actual content instead of colored rectangles

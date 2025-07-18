@@ -12,6 +12,8 @@
 struct nedm_input_manager *
 input_manager_create(struct nedm_server *server);
 void
+input_manager_destroy(struct nedm_input_manager *input);
+void
 input_manager_handle_device_destroy(struct wl_listener *listener, void *data);
 uint32_t
 input_manager_get_mouse_button(const char *name, char **error);

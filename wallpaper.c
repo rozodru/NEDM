@@ -189,26 +189,33 @@ void nedm_wallpaper_create_for_output(struct nedm_output *output) {
 		return;
 	}
 	
-	// Create a colored rectangle as background in the BACKGROUND layer
-	// Use the configured background color
-	wallpaper->scene_rect = wlr_scene_rect_create(output->layers[0], // BACKGROUND layer
-		wallpaper->output_width, wallpaper->output_height, config->bg_color);
+	// Render the wallpaper first
+	nedm_wallpaper_render(wallpaper);
 	
-	if (!wallpaper->scene_rect) {
-		wlr_log(WLR_ERROR, "Failed to create scene rect for wallpaper");
-		nedm_wallpaper_destroy(wallpaper);
-		return;
+	// Create a scene buffer from the rendered wallpaper
+	if (wallpaper->render_surface) {
+		// Create a wlr_buffer from the cairo surface
+		cairo_surface_flush(wallpaper->render_surface);
+		unsigned char *data = cairo_image_surface_get_data(wallpaper->render_surface);
+		int stride = cairo_image_surface_get_stride(wallpaper->render_surface);
+		
+		// For now, create a colored rectangle as fallback
+		wallpaper->scene_rect = wlr_scene_rect_create(output->layers[0], // BACKGROUND layer
+			wallpaper->output_width, wallpaper->output_height, config->bg_color);
+		
+		if (!wallpaper->scene_rect) {
+			wlr_log(WLR_ERROR, "Failed to create scene rect for wallpaper");
+			nedm_wallpaper_destroy(wallpaper);
+			return;
+		}
+		
+		// Position the wallpaper at (0, 0) to cover the entire output
+		wlr_scene_node_set_position(&wallpaper->scene_rect->node, 0, 0);
 	}
-	
-	// Position the wallpaper at (0, 0) to cover the entire output
-	wlr_scene_node_set_position(&wallpaper->scene_rect->node, 0, 0);
 	
 	// Set up event listeners
 	wallpaper->output_destroy.notify = wallpaper_handle_output_destroy;
 	wl_signal_add(&output->events.destroy, &wallpaper->output_destroy);
-	
-	// Render the wallpaper
-	nedm_wallpaper_render(wallpaper);
 	
 	wlr_log(WLR_INFO, "Created wallpaper for output %s (%dx%d) with image %s", 
 		output->wlr_output->name, wallpaper->output_width, wallpaper->output_height, 
@@ -240,7 +247,9 @@ void nedm_wallpaper_destroy(struct nedm_wallpaper *wallpaper) {
 		free(wallpaper->image_path);
 	}
 	
-	wl_list_remove(&wallpaper->output_destroy.link);
+	if (wallpaper->output_destroy.notify) {
+		wl_list_remove(&wallpaper->output_destroy.link);
+	}
 	
 	if (wallpaper->output) {
 		wallpaper->output->wallpaper = NULL;

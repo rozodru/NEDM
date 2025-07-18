@@ -412,6 +412,35 @@ main(int argc, char *argv[]) {
 	server.message_config.font = strdup("pango:Monospace 10");
 	server.message_config.anchor = NEDM_MESSAGE_TOP_RIGHT;
 
+	// Initialize status bar config defaults
+	server.status_bar_config.position = NEDM_STATUS_BAR_TOP_RIGHT;
+	server.status_bar_config.height = 24;
+	server.status_bar_config.width_percent = 20;
+	server.status_bar_config.update_interval = 1000;
+	server.status_bar_config.bg_color[0] = 0.1;
+	server.status_bar_config.bg_color[1] = 0.1;
+	server.status_bar_config.bg_color[2] = 0.1;
+	server.status_bar_config.bg_color[3] = 0.9;
+	server.status_bar_config.text_color[0] = 1.0;
+	server.status_bar_config.text_color[1] = 1.0;
+	server.status_bar_config.text_color[2] = 1.0;
+	server.status_bar_config.text_color[3] = 1.0;
+	server.status_bar_config.font = strdup("monospace 10");
+	server.status_bar_config.show_time = true;
+	server.status_bar_config.show_date = true;
+	server.status_bar_config.show_battery = true;
+	server.status_bar_config.show_volume = true;
+	server.status_bar_config.show_wifi = true;
+	server.status_bar_config.show_workspace = true;
+
+	// Initialize wallpaper config defaults
+	server.wallpaper_config.image_path = strdup("assets/nedm.png");
+	server.wallpaper_config.mode = NEDM_WALLPAPER_FILL;
+	server.wallpaper_config.bg_color[0] = 0.2;
+	server.wallpaper_config.bg_color[1] = 0.2;
+	server.wallpaper_config.bg_color[2] = 0.3;
+	server.wallpaper_config.bg_color[3] = 1.0;
+
 	event_loop = wl_display_get_event_loop(server.wl_display);
 	sigint_source =
 	    wl_event_loop_add_signal(event_loop, SIGINT, handle_signal, &server);
@@ -829,8 +858,9 @@ end:
 	}
 
 	if(server.input != NULL) {
-		free(server.input);
+		input_manager_destroy(server.input);
 	}
+
 	pango_cairo_font_map_set_default(NULL);
 	cairo_debug_reset_static_data();
 	FcFini();

@@ -895,8 +895,10 @@ handle_destroy(struct wl_listener *listener,
 	struct nedm_keyboard_group *group, *group_tmp;
 	wl_list_for_each_safe(group, group_tmp, &seat->keyboard_groups, link) {
 		wl_list_remove(&group->link);
-		wlr_keyboard_group_destroy(group->wlr_group);
+		wl_list_remove(&group->key.link);
+		wl_list_remove(&group->modifiers.link);
 		wl_event_source_remove(group->key_repeat_timer);
+		wlr_keyboard_group_destroy(group->wlr_group);
 		if(group->identifier) {
 			free(group->identifier);
 		}
@@ -909,9 +911,6 @@ handle_destroy(struct wl_listener *listener,
 	}
 
 	wlr_xcursor_manager_destroy(seat->xcursor_manager);
-	if(seat->cursor) {
-		wlr_cursor_destroy(seat->cursor);
-	}
 	wl_list_remove(&seat->cursor_motion.link);
 	wl_list_remove(&seat->cursor_motion_absolute.link);
 	wl_list_remove(&seat->cursor_button.link);
@@ -923,6 +922,9 @@ handle_destroy(struct wl_listener *listener,
 	wl_list_remove(&seat->request_set_cursor.link);
 	wl_list_remove(&seat->request_set_selection.link);
 	wl_list_remove(&seat->request_set_primary_selection.link);
+	if(seat->cursor) {
+		wlr_cursor_destroy(seat->cursor);
+	}
 	seat->server->seat = NULL;
 	free(seat);
 }
