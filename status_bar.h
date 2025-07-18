@@ -37,7 +37,7 @@ struct nedm_status_bar_config {
 };
 
 struct nedm_status_bar {
-	struct wlr_scene_rect *scene_rect;
+	struct wlr_scene_buffer *scene_buffer;
 	struct nedm_output *output;
 	
 	cairo_surface_t *cairo_surface;

@@ -11,8 +11,11 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/util/log.h>
+#include <wlr/render/wlr_renderer.h>
+#include <wlr/render/wlr_texture.h>
+#include <wlr/interfaces/wlr_buffer.h>
+#include <wlr/types/wlr_shm.h>
 #include <drm_fourcc.h>
-
 #include <cairo.h>
 #include <pango/pangocairo.h>
 #include <stdlib.h>
@@ -28,14 +31,78 @@
 #define DEFAULT_FONT "monospace 10"
 #define DEFAULT_UPDATE_INTERVAL 1000 // 1 second
 
-// Simple approach: create a colored rectangle to represent the status bar
-static struct wlr_scene_rect *create_status_bar_rect(struct nedm_output *output, 
-		uint32_t width, uint32_t height, float bg_color[4]) {
+struct status_bar_buffer {
+	struct wlr_buffer base;
+	void *data;
+	uint32_t format;
+	size_t stride;
+};
+
+static void
+status_bar_buffer_destroy(struct wlr_buffer *wlr_buffer) {
+	struct status_bar_buffer *buffer = wl_container_of(wlr_buffer, buffer, base);
+	free(buffer->data);
+	free(buffer);
+}
+
+static bool
+status_bar_buffer_begin_data_ptr_access(struct wlr_buffer *wlr_buffer,
+                                 __attribute__((unused)) uint32_t flags,
+                                 void **data, uint32_t *format,
+                                 size_t *stride) {
+	struct status_bar_buffer *buffer = wl_container_of(wlr_buffer, buffer, base);
+	if(data != NULL) {
+		*data = (void *)buffer->data;
+	}
+	if(format != NULL) {
+		*format = buffer->format;
+	}
+	if(stride != NULL) {
+		*stride = buffer->stride;
+	}
+	return true;
+}
+
+static void
+status_bar_buffer_end_data_ptr_access(
+    __attribute__((unused)) struct wlr_buffer *wlr_buffer) {
+	// This space is intentionally left blank
+}
+
+static const struct wlr_buffer_impl status_bar_buffer_impl = {
+    .destroy = status_bar_buffer_destroy,
+    .begin_data_ptr_access = status_bar_buffer_begin_data_ptr_access,
+    .end_data_ptr_access = status_bar_buffer_end_data_ptr_access,
+};
+
+static struct status_bar_buffer *
+status_bar_buffer_create(uint32_t width, uint32_t height, uint32_t stride) {
+	struct status_bar_buffer *buffer = calloc(1, sizeof(*buffer));
+	if(buffer == NULL) {
+		return NULL;
+	}
+	size_t size = stride * height;
+	buffer->data = malloc(size);
+	if(buffer->data == NULL) {
+		free(buffer);
+		return NULL;
+	}
+	buffer->format = DRM_FORMAT_ARGB8888;
+	buffer->stride = stride;
+	wlr_buffer_init(&buffer->base, &status_bar_buffer_impl, width, height);
+	return buffer;
+}
+
+static struct wlr_scene_buffer *create_status_bar_buffer(struct nedm_status_bar *status_bar) {
+	struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_create(
+		status_bar->output->layers[3], NULL);
 	
-	struct wlr_scene_rect *rect = wlr_scene_rect_create(output->layers[3], 
-		width, height, bg_color);
+	if (!scene_buffer) {
+		wlr_log(WLR_ERROR, "Failed to create scene buffer for status bar");
+		return NULL;
+	}
 	
-	return rect;
+	return scene_buffer;
 }
 
 static void status_bar_gather_system_info(struct nedm_status_info *info) {
@@ -258,9 +325,30 @@ void nedm_status_bar_render(struct nedm_status_bar *status_bar) {
 	// Clean up
 	status_bar_free_info(&info);
 	
-	// For now, we just have a simple colored rectangle
-	// In a more complete implementation, we would render the Cairo surface to a texture
-	// and display that, but for this demo, we'll just show a colored background
+	// Update the scene buffer with the new Cairo surface content
+	if (status_bar->scene_buffer) {
+		cairo_surface_flush(status_bar->cairo_surface);
+		unsigned char *data = cairo_image_surface_get_data(status_bar->cairo_surface);
+		int width = cairo_image_surface_get_width(status_bar->cairo_surface);
+		int height = cairo_image_surface_get_height(status_bar->cairo_surface);
+		int stride = cairo_image_surface_get_stride(status_bar->cairo_surface);
+		
+		struct status_bar_buffer *buf = status_bar_buffer_create(width, height, stride);
+		if (!buf) return;
+		
+		void *data_ptr;
+		if(!wlr_buffer_begin_data_ptr_access(&buf->base,
+		                                     WLR_BUFFER_DATA_PTR_ACCESS_WRITE,
+		                                     &data_ptr, NULL, NULL)) {
+			wlr_log(WLR_ERROR, "Failed to get pointer access to status bar buffer");
+			return;
+		}
+		memcpy(data_ptr, data, stride * height);
+		wlr_buffer_end_data_ptr_access(&buf->base);
+		
+		wlr_scene_buffer_set_buffer(status_bar->scene_buffer, &buf->base);
+		wlr_buffer_drop(&buf->base);
+	}
 }
 
 static int status_bar_timer_callback(void *data) {
@@ -312,10 +400,10 @@ void nedm_status_bar_create_for_output(struct nedm_output *output) {
 	// Render the status bar text first
 	nedm_status_bar_render(status_bar);
 	
-	// Create the status bar rectangle (temporary - should be replaced with Cairo surface)
-	status_bar->scene_rect = create_status_bar_rect(output, status_bar->width, status_bar->height, config->bg_color);
-	if (!status_bar->scene_rect) {
-		wlr_log(WLR_ERROR, "Failed to create scene rect for status bar");
+	// Create the status bar buffer from Cairo surface
+	status_bar->scene_buffer = create_status_bar_buffer(status_bar);
+	if (!status_bar->scene_buffer) {
+		wlr_log(WLR_ERROR, "Failed to create scene buffer for status bar");
 		nedm_status_bar_destroy(status_bar);
 		return;
 	}
@@ -344,7 +432,7 @@ void nedm_status_bar_create_for_output(struct nedm_output *output) {
 		y = 0;
 		break;
 	}
-	wlr_scene_node_set_position(&status_bar->scene_rect->node, x, y);
+	wlr_scene_node_set_position(&status_bar->scene_buffer->node, x, y);
 	
 	// Set up event listeners
 	status_bar->output_destroy.notify = status_bar_handle_output_destroy;
@@ -372,8 +460,8 @@ void nedm_status_bar_destroy(struct nedm_status_bar *status_bar) {
 		wl_event_source_remove(status_bar->timer);
 	}
 	
-	if (status_bar->scene_rect) {
-		wlr_scene_node_destroy(&status_bar->scene_rect->node);
+	if (status_bar->scene_buffer) {
+		wlr_scene_node_destroy(&status_bar->scene_buffer->node);
 	}
 	
 	if (status_bar->font_desc) {

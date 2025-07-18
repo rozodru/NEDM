@@ -26,7 +26,7 @@ struct nedm_wallpaper_config {
 };
 
 struct nedm_wallpaper {
-	struct wlr_scene_rect *scene_rect;
+	struct wlr_scene_buffer *scene_buffer;
 	struct nedm_output *output;
 	
 	cairo_surface_t *image_surface;

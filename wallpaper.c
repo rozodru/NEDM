@@ -15,6 +15,70 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <wlr/interfaces/wlr_buffer.h>
+#include <drm_fourcc.h>
+
+struct wallpaper_buffer {
+	struct wlr_buffer base;
+	void *data;
+	uint32_t format;
+	size_t stride;
+};
+
+static void
+wallpaper_buffer_destroy(struct wlr_buffer *wlr_buffer) {
+	struct wallpaper_buffer *buffer = wl_container_of(wlr_buffer, buffer, base);
+	free(buffer->data);
+	free(buffer);
+}
+
+static bool
+wallpaper_buffer_begin_data_ptr_access(struct wlr_buffer *wlr_buffer,
+                                 __attribute__((unused)) uint32_t flags,
+                                 void **data, uint32_t *format,
+                                 size_t *stride) {
+	struct wallpaper_buffer *buffer = wl_container_of(wlr_buffer, buffer, base);
+	if(data != NULL) {
+		*data = (void *)buffer->data;
+	}
+	if(format != NULL) {
+		*format = buffer->format;
+	}
+	if(stride != NULL) {
+		*stride = buffer->stride;
+	}
+	return true;
+}
+
+static void
+wallpaper_buffer_end_data_ptr_access(
+    __attribute__((unused)) struct wlr_buffer *wlr_buffer) {
+	// This space is intentionally left blank
+}
+
+static const struct wlr_buffer_impl wallpaper_buffer_impl = {
+    .destroy = wallpaper_buffer_destroy,
+    .begin_data_ptr_access = wallpaper_buffer_begin_data_ptr_access,
+    .end_data_ptr_access = wallpaper_buffer_end_data_ptr_access,
+};
+
+static struct wallpaper_buffer *
+wallpaper_buffer_create(uint32_t width, uint32_t height, uint32_t stride) {
+	struct wallpaper_buffer *buffer = calloc(1, sizeof(*buffer));
+	if(buffer == NULL) {
+		return NULL;
+	}
+	size_t size = stride * height;
+	buffer->data = malloc(size);
+	if(buffer->data == NULL) {
+		free(buffer);
+		return NULL;
+	}
+	buffer->format = DRM_FORMAT_XRGB8888;
+	buffer->stride = stride;
+	wlr_buffer_init(&buffer->base, &wallpaper_buffer_impl, width, height);
+	return buffer;
+}
 
 
 static void wallpaper_calculate_scaling(struct nedm_wallpaper *wallpaper, 
@@ -193,25 +257,35 @@ void nedm_wallpaper_create_for_output(struct nedm_output *output) {
 	nedm_wallpaper_render(wallpaper);
 	
 	// Create a scene buffer from the rendered wallpaper
+	wallpaper->scene_buffer = wlr_scene_buffer_create(output->layers[0], NULL);
+	if (!wallpaper->scene_buffer) {
+		wlr_log(WLR_ERROR, "Failed to create scene buffer for wallpaper");
+		nedm_wallpaper_destroy(wallpaper);
+		return;
+	}
+	
 	if (wallpaper->render_surface) {
-		// Create a wlr_buffer from the cairo surface
 		cairo_surface_flush(wallpaper->render_surface);
 		unsigned char *data = cairo_image_surface_get_data(wallpaper->render_surface);
 		int stride = cairo_image_surface_get_stride(wallpaper->render_surface);
 		
-		// For now, create a colored rectangle as fallback
-		wallpaper->scene_rect = wlr_scene_rect_create(output->layers[0], // BACKGROUND layer
-			wallpaper->output_width, wallpaper->output_height, config->bg_color);
-		
-		if (!wallpaper->scene_rect) {
-			wlr_log(WLR_ERROR, "Failed to create scene rect for wallpaper");
-			nedm_wallpaper_destroy(wallpaper);
-			return;
+		struct wallpaper_buffer *buf = wallpaper_buffer_create(wallpaper->output_width, wallpaper->output_height, stride);
+		if (buf) {
+			void *data_ptr;
+			if(wlr_buffer_begin_data_ptr_access(&buf->base,
+			                                     WLR_BUFFER_DATA_PTR_ACCESS_WRITE,
+			                                     &data_ptr, NULL, NULL)) {
+				memcpy(data_ptr, data, stride * wallpaper->output_height);
+				wlr_buffer_end_data_ptr_access(&buf->base);
+				
+				wlr_scene_buffer_set_buffer(wallpaper->scene_buffer, &buf->base);
+				wlr_buffer_drop(&buf->base);
+			}
 		}
-		
-		// Position the wallpaper at (0, 0) to cover the entire output
-		wlr_scene_node_set_position(&wallpaper->scene_rect->node, 0, 0);
 	}
+	
+	// Position the wallpaper at (0, 0) to cover the entire output
+	wlr_scene_node_set_position(&wallpaper->scene_buffer->node, 0, 0);
 	
 	// Set up event listeners
 	wallpaper->output_destroy.notify = wallpaper_handle_output_destroy;
@@ -227,8 +301,8 @@ void nedm_wallpaper_destroy(struct nedm_wallpaper *wallpaper) {
 		return;
 	}
 	
-	if (wallpaper->scene_rect) {
-		wlr_scene_node_destroy(&wallpaper->scene_rect->node);
+	if (wallpaper->scene_buffer) {
+		wlr_scene_node_destroy(&wallpaper->scene_buffer->node);
 	}
 	
 	if (wallpaper->cairo) {
