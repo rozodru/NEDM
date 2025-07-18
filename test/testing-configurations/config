@@ -1,4 +1,0 @@
-# Copyright 2023 - 2025, project-repo and the cagebreak contributors
-# SPDX-License-Identifier: MIT
-exec (echo $CAGEBREAK_SOCKET > CONFIGPATH)
-quit

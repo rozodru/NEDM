@@ -1,4 +1,3 @@
-# Copyright 2020 - 2025, project-repo and the NEDM contributors
 # SPDX-License-Identifier: MIT
 
 # General settings and key bindings
@@ -23,8 +22,8 @@ bind R setmode resize
 bind N nextscreen
 bind P prevscreen
 bind a time
-bind C-n movetonextscreen
-bind C-p movetoprevscreen
+bind A-n movetonextscreen
+bind A-p movetoprevscreen
 bind H exchangeleft
 bind J exchangedown
 bind K exchangeup
