@@ -31,7 +31,9 @@
 #include <wlr/types/wlr_idle_inhibit_v1.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
@@ -654,6 +656,19 @@ main(int argc, char *argv[]) {
 
 	// Initialize layer shell
 	nedm_layer_shell_init(&server);
+
+	// Initialize pointer constraints and relative pointer protocols
+	if(!wlr_pointer_constraints_v1_create(server.wl_display)) {
+		wlr_log(WLR_ERROR, "Unable to create pointer constraints manager");
+		ret = 1;
+		goto end;
+	}
+
+	if(!wlr_relative_pointer_manager_v1_create(server.wl_display)) {
+		wlr_log(WLR_ERROR, "Unable to create relative pointer manager");
+		ret = 1;
+		goto end;
+	}
 
 #if NEDM_HAS_XWAYLAND
 	server.xwayland = wlr_xwayland_create(server.wl_display, compositor, true);
