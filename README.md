@@ -2,6 +2,8 @@
 
 NEDM is a modern, feature-rich Wayland compositor built on top of wlroots, evolved from the Cagebreak window manager. It provides a tiling window management experience with integrated desktop components including a status bar, wallpaper support, and comprehensive configuration options.
 
+![alt text](https://github.com/rozodru/NEDM/blob/master/nedm.jpg?raw=true)
+
 ## Features
 
 ### Core Window Management
