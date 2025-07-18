@@ -331,5 +331,3 @@ NEDM is licensed under the MIT License. See the LICENSE file for details.
 
 Current version: **1.0.0**
 
-For the latest updates and release notes, see [CHANGELOG.md](Changelog.md).
-
