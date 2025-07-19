@@ -35,8 +35,6 @@ struct nedm_server;
                                                                                \
 	KEYBINDING(KEYBINDING_CONFIGURE_MESSAGE,                                   \
 	           configure_message) /* data.m_cfg is the desired config */       \
-	KEYBINDING(KEYBINDING_CONFIGURE_STATUS_BAR,                                \
-	           configure_status_bar) /* data.sb_cfg is the desired config */   \
 	KEYBINDING(KEYBINDING_CONFIGURE_WALLPAPER,                                 \
 	           configure_wallpaper) /* data.wp_cfg is the desired config */    \
 	KEYBINDING(KEYBINDING_CONFIGURE_INPUT,                                     \
@@ -142,7 +140,6 @@ union keybinding_params {
 	struct nedm_output_config *o_cfg;
 	struct nedm_input_config *i_cfg;
 	struct nedm_message_config *m_cfg;
-	struct nedm_status_bar_config *sb_cfg;
 	struct nedm_wallpaper_config *wp_cfg;
 };
 

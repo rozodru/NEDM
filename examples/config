@@ -116,14 +116,9 @@ output eDP-1 peripheral
 # configure_message anchor top_center
 
 ## Status bar configuration
+## Use standalone nedmbar: exec nedmbar
 
-# configure_status_bar position top_right
-# configure_status_bar height 24
-# configure_status_bar width_percent 20
-# configure_status_bar update_interval 1000
-# configure_status_bar font "monospace 10"
-# configure_status_bar bg_color 0.1 0.1 0.1 0.9
-# configure_status_bar text_color 1.0 1.0 1.0 1.0
+# exec nedmbar
 
 ## Wallpaper configuration
 

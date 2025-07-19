@@ -7,7 +7,6 @@
 #include "config.h"
 #include "ipc_server.h"
 #include "message.h"
-#include "status_bar.h"
 #include "wallpaper.h"
 
 #include <wayland-server-core.h>
@@ -67,7 +66,6 @@ struct nedm_server {
 	struct wl_list output_config;
 	struct wl_list input_config;
 	struct nedm_message_config message_config;
-	struct nedm_status_bar_config status_bar_config;
 	struct nedm_wallpaper_config wallpaper_config;
 
 	struct nedm_ipc_handle ipc;

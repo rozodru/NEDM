@@ -58,7 +58,6 @@
 #include "parse.h"
 #include "seat.h"
 #include "server.h"
-#include "status_bar.h"
 #include "wallpaper.h"
 #include "workspace.h"
 #include "xdg_shell.h"
@@ -347,27 +346,6 @@ main(int argc, char *argv[]) {
 	server.bs = 0;
 	server.message_config.enabled = true;
 	
-	// Initialize default status bar configuration
-	server.status_bar_config.enabled = true;
-	server.status_bar_config.position = NEDM_STATUS_BAR_TOP_RIGHT;
-	server.status_bar_config.height = 24;
-	server.status_bar_config.width_percent = 30;
-	server.status_bar_config.update_interval = 1000;
-	server.status_bar_config.bg_color[0] = 0.1;
-	server.status_bar_config.bg_color[1] = 0.1;
-	server.status_bar_config.bg_color[2] = 0.1;
-	server.status_bar_config.bg_color[3] = 0.9;
-	server.status_bar_config.text_color[0] = 1.0;
-	server.status_bar_config.text_color[1] = 1.0;
-	server.status_bar_config.text_color[2] = 1.0;
-	server.status_bar_config.text_color[3] = 1.0;
-	server.status_bar_config.font = strdup("monospace 10");
-	server.status_bar_config.show_time = true;
-	server.status_bar_config.show_date = true;
-	server.status_bar_config.show_battery = true;
-	server.status_bar_config.show_volume = true;
-	server.status_bar_config.show_wifi = true;
-	server.status_bar_config.show_workspace = true;
 	
 	// Initialize default wallpaper configuration
 	server.wallpaper_config.image_path = strdup("assets/nedm.png");
@@ -462,26 +440,6 @@ main(int argc, char *argv[]) {
 	server.message_config.font = strdup("pango:Monospace 10");
 	server.message_config.anchor = NEDM_MESSAGE_TOP_RIGHT;
 
-	// Initialize status bar config defaults
-	server.status_bar_config.position = NEDM_STATUS_BAR_TOP_RIGHT;
-	server.status_bar_config.height = 24;
-	server.status_bar_config.width_percent = 30;
-	server.status_bar_config.update_interval = 1000;
-	server.status_bar_config.bg_color[0] = 0.1;
-	server.status_bar_config.bg_color[1] = 0.1;
-	server.status_bar_config.bg_color[2] = 0.1;
-	server.status_bar_config.bg_color[3] = 0.9;
-	server.status_bar_config.text_color[0] = 1.0;
-	server.status_bar_config.text_color[1] = 1.0;
-	server.status_bar_config.text_color[2] = 1.0;
-	server.status_bar_config.text_color[3] = 1.0;
-	server.status_bar_config.font = strdup("monospace 10");
-	server.status_bar_config.show_time = true;
-	server.status_bar_config.show_date = true;
-	server.status_bar_config.show_battery = true;
-	server.status_bar_config.show_volume = true;
-	server.status_bar_config.show_wifi = true;
-	server.status_bar_config.show_workspace = true;
 
 	// Initialize wallpaper config defaults
 	server.wallpaper_config.image_path = strdup("assets/nedm.png");
@@ -891,9 +849,6 @@ end:
 
 	if(server.message_config.font != NULL) {
 		free(server.message_config.font);
-	}
-	if(server.status_bar_config.font != NULL) {
-		free(server.status_bar_config.font);
 	}
 	if(server.wallpaper_config.image_path != NULL) {
 		free(server.wallpaper_config.image_path);

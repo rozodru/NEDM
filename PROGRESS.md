@@ -269,3 +269,71 @@ NEDM is now a **fully-featured modern Wayland compositor** with excellent applic
 - **Result**: Both relative pointer events and surface pointer events now use synchronized cursor position
 - **File Modified**: `seat.c` - reordered event sequence in `handle_cursor_motion()` function
 - **Status**: Build successful, pointer accuracy issue resolved for gaming applications
+
+## 🚧 Current Issues & Next Tasks (Session 3)
+
+### 18. **swaync Notification Crash Fix** ✅ (Completed)
+- **Original Issue**: NEDM crashed whenever swaync tried to display notifications with "connection reset by peer" error
+- **Root Cause**: Manual `wlr_layer_surface_v1_configure(layer_surface, 0, 0)` call interfering with swaync's configuration flow
+- **Technical Solution**: Removed manual initial configuration call and let `wlr_scene_layer_surface_v1` handle configuration automatically
+- **Key Discovery**: swaync uses GTK4-layer-shell which expects protocol version 4 and proper configure/ack cycle
+- **Files Modified**: `layer_shell.c` - removed conflicting manual configuration
+- **Status**: Notifications now work without crashes, appearing in top-left corner
+
+### 19. **Status Bar Space Reservation Issue** ✅ (Completed)
+- **Original Problem**: Windows didn't respect status bar space due to baked-in status bar using scene buffers
+- **Root Cause**: Integrated status bar used `wlr_scene_buffer_create()` instead of layer shell protocol
+- **Solution Implemented**: Complete architectural redesign - removed integrated status bar, created standalone bar support
+
+**Technical Solution**:
+1. **Removed integrated status bar** - Deleted `status_bar.c/.h` and all references from NEDM core
+2. **Updated configuration system** - Removed status bar config, updated to use `exec nedmbar` pattern  
+3. **Created standalone nedmbar** - New external application using proper layer shell protocol with exclusive zones
+4. **Preserved layer shell support** - NEDM retains full `zwlr-layer-shell-v1` protocol for external bars
+5. **Updated build system** - Removed status bar from meson.build, NEDM compiles successfully
+
+**Benefits Achieved**:
+- ✅ Automatic space reservation via layer shell exclusive zones
+- ✅ Proper integration with Wayland ecosystem standards  
+- ✅ Compatibility with all external status bar applications (swaybar, waybar, eww, etc.)
+- ✅ Clean separation of concerns - NEDM focuses on window management
+- ✅ Modular architecture allowing users to choose any status bar or none at all
+
+### 20. **Other Session 3 Achievements** ✅ (Completed)
+- **Status Bar Position**: Successfully moved to bottom-right corner (user preference)
+- **Layer Shell Protocol**: Verified version 4 compatibility and proper event handling
+- **Debug Infrastructure**: Added comprehensive logging for layer shell surface handling
+- **Code Cleanup**: Removed temporary debug code and restored clean implementation
+
+## 🚧 Current Issues & Next Tasks (Session 4)
+
+### 21. **Status Bar Architectural Redesign** ✅ (Completed)
+- **Task**: Remove integrated status bar and create standalone external bar support
+- **Motivation**: Solve space reservation issues and follow Wayland ecosystem best practices
+- **Implementation**: Complete separation of status bar from NEDM core compositor
+
+**Technical Implementation**:
+- **Source Removal**: Deleted `status_bar.c` and `status_bar.h` files completely
+- **Reference Cleanup**: Removed all status bar references from:
+  - `nedm.c` - removed initialization and configuration code
+  - `output.c` - removed status bar creation and space reservation logic  
+  - `parse.c` - removed `parse_status_bar_config()` function and parsing
+  - `keybinding.h` - removed `KEYBINDING_CONFIGURE_STATUS_BAR` action and data structures
+  - `server.h` - removed `nedm_status_bar_config` structure
+  - `meson.build` - removed status bar source files from build
+- **Configuration Update**: Modified `examples/config` to use `exec nedmbar` pattern
+- **Build Verification**: NEDM compiles successfully without status bar dependencies
+
+**Standalone Bar Creation**:
+- **New Project**: Created `/nedmbar/` directory with standalone status bar implementation
+- **Layer Shell Protocol**: Uses proper `zwlr-layer-shell-v1` with exclusive zones for space reservation
+- **Feature Parity**: Maintains all original functionality (time, date, battery, volume, wifi, workspace)
+- **Wayland Native**: Pure Wayland client using Cairo/Pango rendering
+- **Configurable**: Supports positioning (top/bottom, left/right) and styling options
+
+**Results**:
+- ✅ **NEDM Binary**: Successfully builds `build/nedm` (611KB) without status bar code
+- ✅ **Layer Shell Support**: Full protocol support retained for external bars
+- ✅ **Space Reservation**: External bars will use exclusive zones automatically
+- ✅ **Third-Party Compatibility**: Works with swaybar, waybar, eww, and other Wayland bars
+- ✅ **Clean Architecture**: NEDM focuses solely on window management and compositor functionality

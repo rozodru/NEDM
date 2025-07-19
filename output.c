@@ -36,7 +36,6 @@
 #include "output.h"
 #include "seat.h"
 #include "server.h"
-#include "status_bar.h"
 #include "util.h"
 #include "view.h"
 #include "wallpaper.h"
@@ -57,11 +56,6 @@ output_clear(struct nedm_output *output) {
 
 	wl_list_remove(&output->link);
 
-	// Clean up status bar
-	if(output->status_bar) {
-		nedm_status_bar_destroy(output->status_bar);
-		output->status_bar = NULL;
-	}
 	
 	// Clean up wallpaper
 	if(output->wallpaper) {
@@ -143,23 +137,6 @@ output_get_layout_box(struct nedm_output *output) {
 		output->layout_box.width = box.width;
 		output->layout_box.height = box.height;
 		
-		// Reserve space for status bar if present
-		if (output->status_bar && output->status_bar->mapped) {
-			struct nedm_status_bar_config *config = &output->server->status_bar_config;
-			switch (config->position) {
-			case NEDM_STATUS_BAR_TOP_LEFT:
-			case NEDM_STATUS_BAR_TOP_RIGHT:
-				// Status bar at top - reduce height and move y down
-				output->layout_box.y += config->height;
-				output->layout_box.height -= config->height;
-				break;
-			case NEDM_STATUS_BAR_BOTTOM_LEFT:
-			case NEDM_STATUS_BAR_BOTTOM_RIGHT:
-				// Status bar at bottom - reduce height
-				output->layout_box.height -= config->height;
-				break;
-			}
-		}
 	}
 	return output->layout_box;
 }
@@ -702,7 +679,6 @@ handle_new_output(struct wl_listener *listener, void *data) {
 
 	output->wlr_output = wlr_output;
 	output->destroyed = false;
-	output->status_bar = NULL;
 	output->wallpaper = NULL;
 	wl_signal_init(&output->events.destroy);
 
@@ -744,10 +720,6 @@ handle_new_output(struct wl_listener *listener, void *data) {
 		// Create wallpaper for this output
 		nedm_wallpaper_create_for_output(output);
 		
-		// Create status bar for this output (if enabled)
-		if (server->status_bar_config.enabled) {
-			nedm_status_bar_create_for_output(output);
-		}
 		wlr_output_layout_get_box(server->output_layout, output->wlr_output,
 		                          &output->layout_box);
 

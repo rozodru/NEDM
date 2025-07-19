@@ -11,7 +11,6 @@ struct nedm_server;
 struct nedm_view;
 struct wlr_output;
 struct wlr_surface;
-struct nedm_status_bar;
 struct nedm_wallpaper;
 
 enum output_role {
@@ -39,7 +38,6 @@ struct nedm_output {
 	char *name;
 	
 	struct wlr_scene_tree *layers[4]; // ZWLR_LAYER_SHELL_V1_LAYER_*
-	struct nedm_status_bar *status_bar;
 	struct nedm_wallpaper *wallpaper;
 	struct {
 		struct wl_signal destroy;

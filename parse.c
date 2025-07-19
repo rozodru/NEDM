@@ -15,7 +15,6 @@
 #include "output.h"
 #include "parse.h"
 #include "server.h"
-#include "status_bar.h"
 #include "util.h"
 #include "wallpaper.h"
 
@@ -801,114 +800,6 @@ error:
 	return NULL;
 }
 
-static struct nedm_status_bar_config *
-parse_status_bar_config(char **saveptr, char **errstr) {
-	struct nedm_status_bar_config *cfg = calloc(1, sizeof(struct nedm_status_bar_config));
-	if(cfg == NULL) {
-		*errstr = log_error("Failed to allocate memory for status bar configuration");
-		goto error;
-	}
-
-	// Set defaults
-	cfg->enabled = true;
-	cfg->position = NEDM_STATUS_BAR_TOP_RIGHT;
-	cfg->height = 24;
-	cfg->width_percent = 30;
-	cfg->update_interval = 1000;
-	cfg->bg_color[0] = 0.1f; cfg->bg_color[1] = 0.1f; cfg->bg_color[2] = 0.1f; cfg->bg_color[3] = 0.9f;
-	cfg->text_color[0] = 1.0f; cfg->text_color[1] = 1.0f; cfg->text_color[2] = 1.0f; cfg->text_color[3] = 1.0f;
-	cfg->font = strdup("monospace 10");
-	cfg->show_time = true;
-	cfg->show_date = true;
-	cfg->show_battery = true;
-	cfg->show_volume = true;
-	cfg->show_wifi = true;
-	cfg->show_workspace = true;
-
-	char *setting = strtok_r(NULL, " ", saveptr);
-	if(setting == NULL) {
-		*errstr = log_error("Expected setting to be set for status bar configuration, got none");
-		goto error;
-	}
-
-	if(strcmp(setting, "enabled") == 0) {
-		char *enabled_str = strtok_r(NULL, " ", saveptr);
-		if(enabled_str == NULL) {
-			*errstr = log_error("Expected enabled value for status bar configuration, got none");
-			goto error;
-		}
-		if(strcmp(enabled_str, "true") == 0 || strcmp(enabled_str, "1") == 0) {
-			cfg->enabled = true;
-		} else if(strcmp(enabled_str, "false") == 0 || strcmp(enabled_str, "0") == 0) {
-			cfg->enabled = false;
-		} else {
-			*errstr = log_error("Invalid enabled value \"%s\" for status bar (use true/false)", enabled_str);
-			goto error;
-		}
-	} else if(strcmp(setting, "position") == 0) {
-		char *pos_str = strtok_r(NULL, " ", saveptr);
-		if(pos_str == NULL) {
-			*errstr = log_error("Expected position for status bar configuration, got none");
-			goto error;
-		}
-		if(strcmp(pos_str, "top_left") == 0) {
-			cfg->position = NEDM_STATUS_BAR_TOP_LEFT;
-		} else if(strcmp(pos_str, "top_right") == 0) {
-			cfg->position = NEDM_STATUS_BAR_TOP_RIGHT;
-		} else if(strcmp(pos_str, "bottom_left") == 0) {
-			cfg->position = NEDM_STATUS_BAR_BOTTOM_LEFT;
-		} else if(strcmp(pos_str, "bottom_right") == 0) {
-			cfg->position = NEDM_STATUS_BAR_BOTTOM_RIGHT;
-		} else {
-			*errstr = log_error("Invalid position \"%s\" for status bar", pos_str);
-			goto error;
-		}
-	} else if(strcmp(setting, "height") == 0) {
-		cfg->height = parse_uint(saveptr, " ");
-		if(cfg->height == 0) {
-			*errstr = log_error("Invalid height for status bar");
-			goto error;
-		}
-	} else if(strcmp(setting, "width_percent") == 0) {
-		cfg->width_percent = parse_uint(saveptr, " ");
-		if(cfg->width_percent == 0 || cfg->width_percent > 100) {
-			*errstr = log_error("Invalid width_percent for status bar (must be 1-100)");
-			goto error;
-		}
-	} else if(strcmp(setting, "update_interval") == 0) {
-		cfg->update_interval = parse_uint(saveptr, " ");
-		if(cfg->update_interval == 0) {
-			*errstr = log_error("Invalid update_interval for status bar");
-			goto error;
-		}
-	} else if(strcmp(setting, "font") == 0) {
-		free(cfg->font);
-		cfg->font = strdup(*saveptr);
-		if(cfg->font == NULL) {
-			*errstr = log_error("Unable to allocate memory for font in status bar config");
-			goto error;
-		}
-	} else if(strcmp(setting, "bg_color") == 0) {
-		if(parse_background(cfg->bg_color, saveptr, errstr) != 0) {
-			goto error;
-		}
-	} else if(strcmp(setting, "text_color") == 0) {
-		if(parse_background(cfg->text_color, saveptr, errstr) != 0) {
-			goto error;
-		}
-	} else {
-		*errstr = log_error("Unknown status bar setting: \"%s\"", setting);
-		goto error;
-	}
-
-	return cfg;
-error:
-	if(cfg) {
-		free(cfg->font);
-		free(cfg);
-	}
-	return NULL;
-}
 
 static struct nedm_wallpaper_config *
 parse_wallpaper_config(char **saveptr, char **errstr) {
@@ -1873,12 +1764,6 @@ parse_command(struct nedm_server *server, struct keybinding *keybinding,
 		keybinding->action = KEYBINDING_CONFIGURE_MESSAGE;
 		keybinding->data.m_cfg = parse_message_config(&saveptr, errstr);
 		if(keybinding->data.m_cfg == NULL) {
-			return -1;
-		}
-	} else if(strcmp(action, "configure_status_bar") == 0) {
-		keybinding->action = KEYBINDING_CONFIGURE_STATUS_BAR;
-		keybinding->data.sb_cfg = parse_status_bar_config(&saveptr, errstr);
-		if(keybinding->data.sb_cfg == NULL) {
 			return -1;
 		}
 	} else if(strcmp(action, "configure_wallpaper") == 0) {
