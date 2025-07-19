@@ -341,6 +341,7 @@ main(int argc, char *argv[]) {
 	wl_list_init(&server.output_config);
 	wl_list_init(&server.output_priorities);
 	wl_list_init(&server.xdg_decorations);
+	wl_list_init(&server.layer_surfaces);
 
 	int ret = 0;
 	server.bs = 0;

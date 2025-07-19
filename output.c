@@ -671,11 +671,11 @@ handle_new_output(struct wl_listener *listener, void *data) {
 	}
 	output->scene_output = wlr_scene_output_create(server->scene, wlr_output);
 
-	// Initialize layer trees
-	output->layers[0] = wlr_scene_tree_create(&server->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND
-	output->layers[1] = wlr_scene_tree_create(&server->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM
-	output->layers[2] = wlr_scene_tree_create(&server->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_TOP
-	output->layers[3] = wlr_scene_tree_create(&server->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY
+	// Initialize layer trees as children of the scene_output
+	output->layers[0] = wlr_scene_tree_create(&output->scene_output->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND
+	output->layers[1] = wlr_scene_tree_create(&output->scene_output->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM
+	output->layers[2] = wlr_scene_tree_create(&output->scene_output->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_TOP
+	output->layers[3] = wlr_scene_tree_create(&output->scene_output->scene->tree); // ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY
 
 	output->wlr_output = wlr_output;
 	output->destroyed = false;

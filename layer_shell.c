@@ -71,16 +71,28 @@ static void layer_surface_handle_commit(struct wl_listener *listener, void *data
 	(void)data;
 	struct nedm_layer_surface *surface = wl_container_of(listener, surface, commit);
 	
-	if (surface->layer_surface->initial_commit) {
-		wlr_layer_surface_v1_configure(surface->layer_surface,
-			surface->layer_surface->current.desired_width,
-			surface->layer_surface->current.desired_height);
+	if (surface->layer_surface->initial_commit && surface->layer_surface->initialized) {
+		// Applications expect a configure response
+		uint32_t width = surface->layer_surface->current.desired_width;
+		uint32_t height = surface->layer_surface->current.desired_height;
+		
+		if (width == 0) width = 100;  // Default width if not specified
+		if (height == 0) height = 100; // Default height if not specified
+		
+		wlr_layer_surface_v1_configure(surface->layer_surface, width, height);
+	}
+	
+	if (surface->output) {
+		nedm_arrange_layers(surface->output);
 	}
 }
 
 static void layer_surface_handle_destroy(struct wl_listener *listener, void *data) {
 	(void)data;
 	struct nedm_layer_surface *surface = wl_container_of(listener, surface, destroy);
+	
+	// Remove from server's layer surfaces list
+	wl_list_remove(&surface->link);
 	
 	wl_list_remove(&surface->destroy.link);
 	
@@ -154,13 +166,9 @@ static void layer_shell_handle_new_surface(struct wl_listener *listener, void *d
 	struct nedm_layer_shell *layer_shell = wl_container_of(listener, layer_shell, new_surface);
 	struct wlr_layer_surface_v1 *layer_surface = data;
 	
-	wlr_log(WLR_DEBUG, "New layer surface: namespace %s layer %d anchor %d "
-		"size %dx%d margin %d,%d,%d,%d",
-		layer_surface->namespace, layer_surface->pending.layer, 
-		layer_surface->pending.anchor,
-		layer_surface->pending.desired_width, layer_surface->pending.desired_height,
-		layer_surface->pending.margin.top, layer_surface->pending.margin.right,
-		layer_surface->pending.margin.bottom, layer_surface->pending.margin.left);
+	wlr_log(WLR_ERROR, "=== LAYER SHELL: New surface created ===");
+	wlr_log(WLR_ERROR, "namespace: %s", layer_surface->namespace);
+	wlr_log(WLR_ERROR, "client: %p", layer_surface->resource ? wl_resource_get_client(layer_surface->resource) : NULL);
 	
 	struct nedm_layer_surface *surface = calloc(1, sizeof(struct nedm_layer_surface));
 	if (!surface) {
@@ -199,9 +207,19 @@ static void layer_shell_handle_new_surface(struct wl_listener *listener, void *d
 	
 	surface->output = output;
 	
+	// Add to server's layer surfaces list
+	wl_list_insert(&server->layer_surfaces, &surface->link);
+	
 	// Create scene layer surface
+	wlr_log(WLR_ERROR, "Creating scene layer surface for layer %d", layer_surface->pending.layer);
 	surface->scene_layer_surface = wlr_scene_layer_surface_v1_create(
 		output->layers[layer_surface->pending.layer], layer_surface);
+	if (!surface->scene_layer_surface) {
+		wlr_log(WLR_ERROR, "FAILED to create scene layer surface");
+		free(surface);
+		return;
+	}
+	wlr_log(WLR_ERROR, "Successfully created scene layer surface %p", surface->scene_layer_surface);
 	
 	surface->destroy.notify = layer_surface_handle_destroy;
 	wl_signal_add(&layer_surface->events.destroy, &surface->destroy);
@@ -224,8 +242,8 @@ static void layer_shell_handle_new_surface(struct wl_listener *listener, void *d
 	surface->new_popup.notify = layer_surface_handle_new_popup;
 	wl_signal_add(&layer_surface->events.new_popup, &surface->new_popup);
 	
-	// Let wlr_scene_layer_surface_v1 handle initial configuration automatically
-	// wlr_layer_surface_v1_configure(layer_surface, 0, 0);
+	// Arrange layers to ensure proper positioning
+	nedm_arrange_layers(output);
 }
 
 static void layer_shell_handle_destroy(struct wl_listener *listener, void *data) {
@@ -270,36 +288,87 @@ void nedm_layer_shell_destroy(struct nedm_layer_shell *layer_shell) {
 	free(layer_shell);
 }
 
+static void arrange_layer(struct nedm_output *output, int layer_index, 
+                         struct wlr_box *full_area, struct wlr_box *usable_area, bool exclusive) {
+	if (!output->layers[layer_index]) {
+		return;
+	}
+	
+	// Instead of searching the scene tree, iterate through our stored layer surfaces
+	// Find all nedm_layer_surface instances for this output and layer
+	struct nedm_server *server = output->server;
+	struct nedm_layer_surface *surface;
+	
+	// We need to iterate through all layer surfaces and find ones that match this output and layer
+	// This is a temporary solution - ideally we'd store them in a list per output/layer
+	wl_list_for_each(surface, &server->layer_surfaces, link) {
+		if (surface->output != output) {
+			continue;
+		}
+		
+		if (!surface->scene_layer_surface || !surface->layer_surface) {
+			continue;
+		}
+		
+		if (surface->layer_surface->current.layer != layer_index) {
+			continue;
+		}
+		
+		struct wlr_scene_layer_surface_v1 *scene_layer_surface = surface->scene_layer_surface;
+		
+		struct wlr_layer_surface_v1 *layer_surface = scene_layer_surface->layer_surface;
+		
+		wlr_log(WLR_ERROR, "Found layer surface: namespace='%s' exclusive_zone=%d anchor=%d size=%dx%d", 
+			layer_surface->namespace, layer_surface->current.exclusive_zone,
+			layer_surface->current.anchor, layer_surface->current.actual_width, layer_surface->current.actual_height);
+		
+		// Only arrange surfaces with exclusive zones in the exclusive pass
+		// and non-exclusive surfaces in the non-exclusive pass
+		if ((layer_surface->current.exclusive_zone > 0) != exclusive) {
+			wlr_log(WLR_ERROR, "Skipping surface (exclusive_zone=%d, exclusive_pass=%s)", 
+				layer_surface->current.exclusive_zone, exclusive ? "true" : "false");
+			continue;
+		}
+		
+		if (!scene_layer_surface->layer_surface->initialized) {
+			wlr_log(WLR_ERROR, "Skipping uninitialized layer surface");
+			continue;
+		}
+		
+		wlr_log(WLR_ERROR, "CONFIGURING layer surface: full_area=%d,%d %dx%d usable_area=%d,%d %dx%d",
+			full_area->x, full_area->y, full_area->width, full_area->height,
+			usable_area->x, usable_area->y, usable_area->width, usable_area->height);
+		wlr_scene_layer_surface_v1_configure(scene_layer_surface, full_area, usable_area);
+	}
+}
+
 void nedm_arrange_layers(struct nedm_output *output) {
 	if (!output || !output->wlr_output) {
 		return;
 	}
 	
-	struct wlr_box full_area = {0};
-	full_area.width = output->wlr_output->width;
-	full_area.height = output->wlr_output->height;
+	wlr_log(WLR_ERROR, "NEDM ARRANGE LAYERS: Called for output %s (%dx%d)",
+		output->wlr_output->name, output->wlr_output->width, output->wlr_output->height);
+	
+	struct wlr_box full_area = {
+		.x = 0,
+		.y = 0,
+		.width = output->wlr_output->width,
+		.height = output->wlr_output->height
+	};
 	
 	struct wlr_box usable_area = full_area;
 	
-	// Arrange layers from background to overlay
-	// Each layer tree's layer surfaces will be positioned according to their configuration
-	for (int i = 0; i < 4; i++) {
-		if (!output->layers[i]) {
-			continue;
-		}
-		
-		// Iterate through layer surfaces in this layer
-		struct wlr_scene_node *node;
-		wl_list_for_each(node, &output->layers[i]->children, link) {
-			if (node->type == WLR_SCENE_NODE_TREE) {
-				struct wlr_scene_tree *tree = wlr_scene_tree_from_node(node);
-				if (tree->node.data) {
-					struct wlr_scene_layer_surface_v1 *scene_layer_surface = tree->node.data;
-					if (scene_layer_surface && scene_layer_surface->layer_surface) {
-						wlr_scene_layer_surface_v1_configure(scene_layer_surface, &full_area, &usable_area);
-					}
-				}
-			}
-		}
-	}
+	// Arrange layers in Sway's order: overlay, top, bottom, background
+	// First pass: arrange surfaces with exclusive zones
+	arrange_layer(output, 3, &full_area, &usable_area, true); // OVERLAY
+	arrange_layer(output, 2, &full_area, &usable_area, true); // TOP
+	arrange_layer(output, 1, &full_area, &usable_area, true); // BOTTOM
+	arrange_layer(output, 0, &full_area, &usable_area, true); // BACKGROUND
+	
+	// Second pass: arrange surfaces without exclusive zones
+	arrange_layer(output, 3, &full_area, &usable_area, false); // OVERLAY
+	arrange_layer(output, 2, &full_area, &usable_area, false); // TOP
+	arrange_layer(output, 1, &full_area, &usable_area, false); // BOTTOM
+	arrange_layer(output, 0, &full_area, &usable_area, false); // BACKGROUND
 }
