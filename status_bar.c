@@ -430,7 +430,7 @@ void nedm_status_bar_create_for_output(struct nedm_output *output) {
 		break;
 	case NEDM_STATUS_BAR_TOP_RIGHT:
 		x = output_width - status_bar->width;
-		y = 0;
+		y = output_height - status_bar->height; // TEMPORARILY MOVED TO BOTTOM-RIGHT TO TEST NOTIFICATION CONFLICT
 		break;
 	case NEDM_STATUS_BAR_BOTTOM_LEFT:
 		x = 0;
@@ -442,7 +442,7 @@ void nedm_status_bar_create_for_output(struct nedm_output *output) {
 		break;
 	default:
 		x = output_width - status_bar->width;
-		y = 0;
+		y = output_height - status_bar->height; // MOVED TO BOTTOM-RIGHT TO TEST NOTIFICATION CONFLICT
 		break;
 	}
 	wlr_scene_node_set_position(&status_bar->scene_buffer->node, x, y);

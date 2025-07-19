@@ -83,9 +83,20 @@ static void layer_surface_handle_destroy(struct wl_listener *listener, void *dat
 	struct nedm_layer_surface *surface = wl_container_of(listener, surface, destroy);
 	
 	wl_list_remove(&surface->destroy.link);
-	wl_list_remove(&surface->map.link);
-	wl_list_remove(&surface->unmap.link);
-	wl_list_remove(&surface->commit.link);
+	
+	// Only remove surface event listeners if they were added
+	if (surface->layer_surface && surface->layer_surface->surface) {
+		if (!wl_list_empty(&surface->map.link)) {
+			wl_list_remove(&surface->map.link);
+		}
+		if (!wl_list_empty(&surface->unmap.link)) {
+			wl_list_remove(&surface->unmap.link);
+		}
+		if (!wl_list_empty(&surface->commit.link)) {
+			wl_list_remove(&surface->commit.link);
+		}
+	}
+	
 	wl_list_remove(&surface->new_popup.link);
 	
 	if (surface->output) {
@@ -160,6 +171,11 @@ static void layer_shell_handle_new_surface(struct wl_listener *listener, void *d
 	surface->layer_surface = layer_surface;
 	layer_surface->data = surface;
 	
+	// Initialize listener links
+	wl_list_init(&surface->map.link);
+	wl_list_init(&surface->unmap.link);
+	wl_list_init(&surface->commit.link);
+	
 	// Find output for this layer surface
 	struct nedm_server *server = layer_shell->layer_shell->data;
 	struct nedm_output *output = NULL;
@@ -191,19 +207,25 @@ static void layer_shell_handle_new_surface(struct wl_listener *listener, void *d
 	wl_signal_add(&layer_surface->events.destroy, &surface->destroy);
 	
 	surface->map.notify = layer_surface_handle_map;
-	wl_signal_add(&layer_surface->surface->events.map, &surface->map);
+	if (layer_surface->surface) {
+		wl_signal_add(&layer_surface->surface->events.map, &surface->map);
+	}
 	
 	surface->unmap.notify = layer_surface_handle_unmap;
-	wl_signal_add(&layer_surface->surface->events.unmap, &surface->unmap);
+	if (layer_surface->surface) {
+		wl_signal_add(&layer_surface->surface->events.unmap, &surface->unmap);
+	}
 	
 	surface->commit.notify = layer_surface_handle_commit;
-	wl_signal_add(&layer_surface->surface->events.commit, &surface->commit);
+	if (layer_surface->surface) {
+		wl_signal_add(&layer_surface->surface->events.commit, &surface->commit);
+	}
 	
 	surface->new_popup.notify = layer_surface_handle_new_popup;
 	wl_signal_add(&layer_surface->events.new_popup, &surface->new_popup);
 	
-	// Initial configuration
-	wlr_layer_surface_v1_configure(layer_surface, 0, 0);
+	// Let wlr_scene_layer_surface_v1 handle initial configuration automatically
+	// wlr_layer_surface_v1_configure(layer_surface, 0, 0);
 }
 
 static void layer_shell_handle_destroy(struct wl_listener *listener, void *data) {
@@ -222,6 +244,11 @@ void nedm_layer_shell_init(struct nedm_server *server) {
 	}
 	
 	layer_shell->layer_shell = wlr_layer_shell_v1_create(server->wl_display, 4);
+	if (!layer_shell->layer_shell) {
+		wlr_log(WLR_ERROR, "Failed to create layer shell v1");
+		free(layer_shell);
+		return;
+	}
 	layer_shell->layer_shell->data = server;
 	
 	layer_shell->new_surface.notify = layer_shell_handle_new_surface;
@@ -244,7 +271,7 @@ void nedm_layer_shell_destroy(struct nedm_layer_shell *layer_shell) {
 }
 
 void nedm_arrange_layers(struct nedm_output *output) {
-	if (!output) {
+	if (!output || !output->wlr_output) {
 		return;
 	}
 	
@@ -268,7 +295,9 @@ void nedm_arrange_layers(struct nedm_output *output) {
 				struct wlr_scene_tree *tree = wlr_scene_tree_from_node(node);
 				if (tree->node.data) {
 					struct wlr_scene_layer_surface_v1 *scene_layer_surface = tree->node.data;
-					wlr_scene_layer_surface_v1_configure(scene_layer_surface, &full_area, &usable_area);
+					if (scene_layer_surface && scene_layer_surface->layer_surface) {
+						wlr_scene_layer_surface_v1_configure(scene_layer_surface, &full_area, &usable_area);
+					}
 				}
 			}
 		}

@@ -172,6 +172,10 @@ handle_signal(int signal, void *const data) {
 		}
 		return 0;
 	}
+	case SIGPIPE:
+		/* Ignore broken pipe signals */
+		wlr_log(WLR_DEBUG, "Ignoring SIGPIPE");
+		return 0;
 	default:
 		return 0;
 	}
